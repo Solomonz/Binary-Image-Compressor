@@ -44,23 +44,27 @@ def calculate_pairwise_encoding(run_length_array, first_bit, zero_len, one_len):
     return ceil((len(out) + 4 + 4 + 1) / 8), out
 
 
-def calculate_pairwise_encoding_with_LEB(bit_array, zero_len, one_len):
+def calculate_pairwise_encoding_with_LEB(run_length_array, first_bit, zero_len, one_len):
     max_zeros = 2**zero_len - 1
     max_ones = 2**one_len - 1
 
     out = []
     cur_run_bit = 0
-    cur_run_len = 0
-    i = 0
 
-    while i < len(bit_array):
+    for r in run_length_array:
         cur_max_len = max_ones if cur_run_bit else max_zeros
-        if bit_array[i] == cur_run_bit and cur_run_len < cur_max_len:
-            cur_run_len += 1
-            i += 1
-        else:
-            pass
-            # out.extend()
+        cur_bit_len = one_len if cur_run_bit else zero_len
+        alternate_bit_len = zero_len if cur_run_bit else one_len
+        required_bits = ceil(log2(r + 1))
+        required_units = ceil(required_bits / cur_bit_len)
+        bits = num_to_bits(r, required_units * cur_bit_len)
+        for u in range(required_units - 1):
+            out.extend(bits[u * cur_bit_len:(u+1)*cur_bit_len])
+            out.extend(num_to_bits(0, alternate_bit_len))
+        out.extend(bits[(required_units - 1)*cur_bit_len:])
+        cur_run_bit = 1 - cur_run_bit
+    return ceil((len(out) + 4 + 4 + 1) / 8), out
+
 
 
 def calculate_bit_prefix_encoding(run_length_array, first_bit, num_len_bits):
