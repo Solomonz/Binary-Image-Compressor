@@ -1,3 +1,4 @@
+import subprocess
 from sys import argv
 from math import ceil, inf, log2
 import json
@@ -152,12 +153,29 @@ def encode_optimal_monospace(bit_array):
     return num_bytes, serialized_out
 
 
+def encode_optimal_gzip_pixels(bit_array):
+    byte_values = []
+    for i in range(0, len(bit_array), 8):
+        pattern_int = bit_array[i : i + 8]
+        pattern_str = "".join([str(b) for b in pattern_int])
+        byte_values.append(int(pattern_str, 2))
+    pixels_fpath = "/tmp/gzip-input.dat"
+    pixels_file = open(pixels_fpath, "wb")
+    pixels_file.write(bytes(byte_values))
+    pixels_file.close()
+    subprocess.run(["gzip", pixels_fpath, "-f", "-k"])
+    gzip_out_fpath = pixels_fpath + ".gz"
+    num_bytes = os.path.getsize(gzip_out_fpath)
+    return num_bytes, []
+
+
 ENCODERS = [
     encode_optimal_naive,
     encode_optimal_monospace,
     encode_optimal_bit_prefix,
     encode_optimal_pairwise,
     encode_optimal_pairwise_LEB,
+    encode_optimal_gzip_pixels,
 ]
 
 
@@ -194,6 +212,7 @@ def test_whole_suite():
 
     print("\n**SUMMARY**")
     print(f"Number of images tested: {num_images}")
+    summary_data = dict(sorted(summary_data.items(), key=lambda item: item[1]["sum"]))
     for algo_name in summary_data:
         print(f"{algo_name}:")
         stats = summary_data[algo_name]
