@@ -1,18 +1,7 @@
 from sys import argv
-from math import ceil
-from PIL import Image
-
-def png_to_bit_array(png_file):
-    # Open the PNG image
-    img = Image.open(png_file)
-
-    # Convert the image to grayscale if it's not already
-    img = img.convert('L')
-
-    # Get pixel data as a byte array
-    pixel_data = img.tobytes()
-
-    return list(map(lambda b: 1 if b else 0, pixel_data))
+from math import ceil, inf
+import json
+import os
 
 
 def num_to_bits(n, num_bits):
@@ -82,16 +71,8 @@ def calculate_bit_prefix_encoding(bit_array, num_len_bits):
     return ceil((len(out) + 4) / 8), out
     
 
-if __name__ == "__main__":
-    png_file = argv[1]
-    # print(calculate_pairwise_encoding(([0] * 3 + [1] * 7) * 2, 2, 3))
-    print(calculate_pairwise_encoding([0, 0, 0, 0, 1], 2, 2))
-    print(calculate_bit_prefix_encoding([0, 0, 0, 0, 1], 2))
-    bit_array = png_to_bit_array(png_file)
-    # print(bit_array)
-    # print(len(bit_array))
-    # print(len(set(bit_array)))
-    best_pairwise_size = 512
+def encode_optimal_pairwise(bit_array):
+    best_byte_size = inf
     best_pairwise_num_bits = (None, None)
     best_pairwise_encoded = None
     pairwise_sizes = []
@@ -99,28 +80,62 @@ if __name__ == "__main__":
         i_sizes = []
         for j in range(1, 13):
             num_bytes, encoded = calculate_pairwise_encoding(bit_array, i, j)
-            if num_bytes < best_pairwise_size:
-                best_pairwise_size = num_bytes
+            if num_bytes < best_byte_size:
+                best_byte_size = num_bytes
                 best_pairwise_num_bits = (i, j)
                 best_pairwise_encoded = encoded
-            i_sizes.append(str(len(encoded)))
-        pairwise_sizes.append(i_sizes)
-    # print("\n".join(map(lambda i_sizes: ','.join(i_sizes), pairwise_sizes)))
-    print(f"best pairwise size: {best_pairwise_size} (zero len {best_pairwise_num_bits[0]}, one len {best_pairwise_num_bits[1]})")
-    # print(best_pairwise_num_bits)
-    # print(best_pairwise_encoded)
-    # print(len([b for b in best_pairwise_encoded if b == 0]))
+    return best_byte_size, best_pairwise_encoded
 
-    best_bit_prefix_size = 512
-    best_bit_prefix_num_bits = None
-    best_bit_prefix_encoded = None
+
+def encode_optimal_bit_prefix(bit_array):
+    best_byte_size = 512
+    best_bit_size = None
+    best_encoded = None
     for i in range(1, 13):
         num_bytes, encoded = calculate_bit_prefix_encoding(bit_array, i)
-        if num_bytes < best_bit_prefix_size:
-            best_bit_prefix_size = num_bytes
-            best_bit_prefix_num_bits = i
-            best_bit_prefix_encoded = encoded
-    print(f"best bit prefix size: {best_bit_prefix_size} ({best_bit_prefix_num_bits} bit len)")
-    # print(best_bit_prefix_num_bits)
+        if num_bytes < best_byte_size:
+            best_byte_size = num_bytes
+            best_bit_size = i
+            best_encoded = encoded
+    return best_byte_size, best_encoded
 
 
+def encode_optimal_naive(bit_array):
+    num_bytes = ceil(len(bit_array) / 8)
+    return num_bytes, bit_array
+
+
+ENCODERS = [encode_optimal_bit_prefix, encode_optimal_pairwise, encode_optimal_naive]
+
+
+def test_whole_suite():
+    script_dir = os.path.dirname(__file__)
+    json_fpath = os.path.join(script_dir, "images/keyboard_images.json")
+    json_pixels = json.load(open(json_fpath))
+
+    algos = [(algo.__name__, algo) for algo in ENCODERS]
+    # algo name => (sum, mean, min, max)
+    summary_data = { algo_name: (0, inf, 0) for (algo_name, _) in algos}
+    for img_name in json_pixels:
+        print(f"Case {img_name}")
+        pixel_str = json_pixels[img_name]
+        img_pixels = [int(c) for c in pixel_str]
+        for idx, (algo_name, algo) in enumerate(algos):
+            num_bytes, _ = algo(img_pixels)
+            cur_sum, cur_min, cur_max = summary_data[algo_name]
+            cur_sum += num_bytes
+            cur_min = min(cur_min, num_bytes)
+            cur_max = max(cur_max, num_bytes)
+            summary_data[algo_name] = cur_sum, cur_min, cur_max 
+            print(f"  {algo_name} used {num_bytes} bytes")
+
+    print("\n**SUMMARY**")
+    for algo_name in summary_data:
+        print(f"{algo_name}:")
+        cur_sum, cur_min, cur_max = summary_data[algo_name]
+        avg = ceil(cur_sum / len(json_pixels))
+        print(f"  total bytes used: {cur_sum} avg: {avg} min: {cur_min} max: {cur_max}")
+
+
+if __name__ == "__main__":
+    test_whole_suite()
