@@ -44,7 +44,9 @@ def calculate_pairwise_encoding(run_length_array, first_bit, zero_len, one_len):
     return ceil((len(out) + 4 + 4 + 1) / 8), out
 
 
-def calculate_pairwise_encoding_with_LEB(run_length_array, first_bit, zero_len, one_len):
+def calculate_pairwise_encoding_with_LEB(
+    run_length_array, first_bit, zero_len, one_len
+):
     max_zeros = 2**zero_len - 1
     max_ones = 2**one_len - 1
 
@@ -59,12 +61,11 @@ def calculate_pairwise_encoding_with_LEB(run_length_array, first_bit, zero_len, 
         required_units = ceil(required_bits / cur_bit_len)
         bits = num_to_bits(r, required_units * cur_bit_len)
         for u in range(required_units - 1):
-            out.extend(bits[u * cur_bit_len:(u+1)*cur_bit_len])
+            out.extend(bits[u * cur_bit_len : (u + 1) * cur_bit_len])
             out.extend(num_to_bits(0, alternate_bit_len))
-        out.extend(bits[(required_units - 1)*cur_bit_len:])
+        out.extend(bits[(required_units - 1) * cur_bit_len :])
         cur_run_bit = 1 - cur_run_bit
     return ceil((len(out) + 4 + 4 + 1) / 8), out
-
 
 
 def calculate_bit_prefix_encoding(run_length_array, first_bit, num_len_bits):
@@ -90,6 +91,23 @@ def encode_optimal_pairwise(bit_array):
     for i in range(1, 13):
         for j in range(1, 13):
             num_bytes, encoded = calculate_pairwise_encoding(
+                run_length_array, first_bit, i, j
+            )
+            if num_bytes < best_byte_size:
+                best_byte_size = num_bytes
+                best_num_bits = (i, j)
+                best_encoded = encoded
+    return best_byte_size, best_encoded
+
+
+def encode_optimal_pairwise_LEB(bit_array):
+    best_byte_size = inf
+    best_num_bits = (None, None)
+    best_encoded = None
+    run_length_array, first_bit = bit_array_to_run_length_array(bit_array)
+    for i in range(1, 13):
+        for j in range(1, 13):
+            num_bytes, encoded = calculate_pairwise_encoding_with_LEB(
                 run_length_array, first_bit, i, j
             )
             if num_bytes < best_byte_size:
@@ -135,10 +153,11 @@ def encode_optimal_monospace(bit_array):
 
 
 ENCODERS = [
-    encode_optimal_bit_prefix,
-    encode_optimal_pairwise,
     encode_optimal_naive,
     encode_optimal_monospace,
+    encode_optimal_bit_prefix,
+    encode_optimal_pairwise,
+    encode_optimal_pairwise_LEB,
 ]
 
 
@@ -146,34 +165,44 @@ def test_whole_suite():
     script_dir = os.path.dirname(__file__)
     json_fpath = os.path.join(script_dir, "images/keyboard_images.json")
     json_pixels = json.load(open(json_fpath))
+    num_images = len(json_pixels)
 
     algos = [(algo.__name__, algo) for algo in ENCODERS]
-    # algo name => (sum, min, max)
-    summary_data = {algo_name: (0, inf, 0) for (algo_name, _) in algos}
+    summary_data = {
+        algo_name: {"wins": 0, "sum": 0, "min": inf, "max": 0}
+        for (algo_name, _) in algos
+    }
     for img_name in json_pixels:
         print(f"Case {img_name}")
         pixel_str = json_pixels[img_name]
         img_pixels = [int(c) for c in pixel_str]
-        min_bytes_per_img = 0
+        min_bytes_this_img = inf
+        algo_to_byte_size = {}
         for idx, (algo_name, algo) in enumerate(algos):
             num_bytes, _ = algo(img_pixels)
-            best_byte_size = min(min_bytes_per_img, num_bytes)
-            cur_sum, cur_min, cur_max = summary_data[algo_name]
-            cur_sum += num_bytes
-            cur_min = min(cur_min, num_bytes)
-            cur_max = max(cur_max, num_bytes)
-            summary_data[algo_name] = cur_sum, cur_min, cur_max
+            if num_bytes < min_bytes_this_img:
+                min_bytes_this_img = num_bytes
+            algo_stats = summary_data[algo_name]
+            algo_stats["sum"] += num_bytes
+            algo_stats["min"] = min(algo_stats["min"], num_bytes)
+            algo_stats["max"] = max(algo_stats["max"], num_bytes)
+            algo_to_byte_size[algo_name] = num_bytes
             print(f"  {algo_name} used {num_bytes} bytes")
+        for algo_name, _ in algos:
+            if algo_to_byte_size[algo_name] == min_bytes_this_img:
+                summary_data[algo_name]["wins"] += 1
 
     print("\n**SUMMARY**")
+    print(f"Number of images tested: {num_images}")
     for algo_name in summary_data:
         print(f"{algo_name}:")
-        cur_sum, cur_min, cur_max = summary_data[algo_name]
-        avg = ceil(cur_sum / len(json_pixels))
-        print(f"  total bytes used: {cur_sum} avg: {avg} min: {cur_min} max: {cur_max}")
+        stats = summary_data[algo_name]
+        bytes_sum = stats["sum"]
+        bytes_avg = ceil(bytes_sum / num_images)
+        print(
+            f"  wins: {stats['wins']} total bytes used: {bytes_sum} avg: {bytes_avg} min: {stats['min']} max: {stats['max']}"
+        )
 
 
 if __name__ == "__main__":
-    print(calculate_pairwise_encoding([4, 6, 1], 0, 2, 2))
-    print(calculate_bit_prefix_encoding([4, 1], 0, 2))
     test_whole_suite()
