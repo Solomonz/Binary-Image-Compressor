@@ -59,7 +59,7 @@ def calculate_bisexual_encoding_with_LEB(bit_array, zero_len, one_len):
             i += 1
         else:
             pass
-            # out.extend(
+            # out.extend()
 
 
 def calculate_unisexual_encoding(bit_array, num_len_bits):
