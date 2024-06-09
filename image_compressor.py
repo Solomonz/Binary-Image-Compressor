@@ -1,5 +1,5 @@
 from sys import argv
-from math import ceil, inf
+from math import ceil, inf, log2
 import json
 import os
 
@@ -105,7 +105,30 @@ def encode_optimal_naive(bit_array):
     return num_bytes, bit_array
 
 
-ENCODERS = [encode_optimal_bit_prefix, encode_optimal_pairwise, encode_optimal_naive]
+def encode_optimal_monospace(bit_array):
+    max_run_len = 0
+    cur_run_len = 1
+    num_runs = 1
+    for i in range(1, len(bit_array)):
+        if bit_array[i] == bit_array[i - 1]:
+            cur_run_len += 1
+        else:
+            cur_run_len = 1
+            num_runs += 1
+        max_run_len = max(max_run_len, cur_run_len)
+    bits_per_run = ceil(log2(max_run_len + 1))
+    total_bits = bits_per_run * num_runs
+    num_bytes = ceil(total_bits / 8)
+    serialized_out = [] # unimplemented
+    return num_bytes, serialized_out
+
+
+ENCODERS = [
+    encode_optimal_bit_prefix,
+    encode_optimal_pairwise,
+    encode_optimal_naive,
+    encode_optimal_monospace,
+]
 
 
 def test_whole_suite():
@@ -114,14 +137,16 @@ def test_whole_suite():
     json_pixels = json.load(open(json_fpath))
 
     algos = [(algo.__name__, algo) for algo in ENCODERS]
-    # algo name => (sum, mean, min, max)
+    # algo name => (sum, min, max)
     summary_data = { algo_name: (0, inf, 0) for (algo_name, _) in algos}
     for img_name in json_pixels:
         print(f"Case {img_name}")
         pixel_str = json_pixels[img_name]
         img_pixels = [int(c) for c in pixel_str]
+        min_bytes_per_img = 0
         for idx, (algo_name, algo) in enumerate(algos):
             num_bytes, _ = algo(img_pixels)
+            best_byte_size = min(min_bytes_per_img, num_bytes)
             cur_sum, cur_min, cur_max = summary_data[algo_name]
             cur_sum += num_bytes
             cur_min = min(cur_min, num_bytes)
