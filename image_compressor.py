@@ -169,6 +169,23 @@ def encode_optimal_gzip_pixels(bit_array):
     return num_bytes, []
 
 
+def encode_optimal_gzip_run_length(bit_array):
+    run_length_array, _ = bit_array_to_run_length_array(bit_array)
+    pixels_fpath = "/tmp/gzip-input.dat"
+    pixels_file = open(pixels_fpath, "wb")
+    for r in run_length_array:
+        required_bits = ceil(log2(r + 1))
+        required_bytes = ceil(required_bits / 8)
+        pixels_file.write(r.to_bytes(required_bytes, byteorder='little'))
+    pixels_file.close()
+    subprocess.run(["gzip", pixels_fpath, "-f", "-k"])
+    gzip_out_fpath = pixels_fpath + ".gz"
+    num_bytes = os.path.getsize(gzip_out_fpath)
+    # pay a byte to tell us the first bit.
+    num_bytes += 1
+    return num_bytes, []
+
+
 ENCODERS = [
     encode_optimal_naive,
     encode_optimal_monospace,
@@ -176,6 +193,7 @@ ENCODERS = [
     encode_optimal_pairwise,
     encode_optimal_pairwise_LEB,
     encode_optimal_gzip_pixels,
+    encode_optimal_gzip_run_length,
 ]
 
 
@@ -211,7 +229,7 @@ def test_whole_suite():
                 summary_data[algo_name]["wins"] += 1
 
     print("\n**SUMMARY**")
-    print(f"Number of images tested: {num_images}")
+    print(f"Number of images tested: {num_images}\n")
     summary_data = dict(sorted(summary_data.items(), key=lambda item: item[1]["sum"]))
     for algo_name in summary_data:
         print(f"{algo_name}:")
@@ -221,6 +239,7 @@ def test_whole_suite():
         print(
             f"  wins: {stats['wins']} total bytes used: {bytes_sum} avg: {bytes_avg} min: {stats['min']} max: {stats['max']}"
         )
+        print("")
 
 
 if __name__ == "__main__":
